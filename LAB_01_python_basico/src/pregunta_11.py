@@ -1,3 +1,7 @@
+import csv
+import os
+
+
 def pregunta_11():
     """
     La cuarta columna (`codes`) contiene letras minúsculas separadas por
@@ -10,4 +14,19 @@ def pregunta_11():
         {"a": 122, "b": 49, "c": 91, ...}
     """
 
-    raise NotImplementedError
+    data_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "data",
+        "data.csv",
+    )
+    totals = {}
+    with open(data_path, newline="") as data_file:
+        for row in csv.reader(data_file, delimiter="\t"):
+            value = int(row[1])
+            for code in row[3].split(","):
+                totals[code] = totals.get(code, 0) + value
+    return dict(sorted(totals.items()))
+
+
+if __name__ == "__main__":
+    print(pregunta_11())

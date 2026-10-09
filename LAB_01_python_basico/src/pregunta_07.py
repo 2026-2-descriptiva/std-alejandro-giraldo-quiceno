@@ -1,3 +1,7 @@
+import csv
+import os
+
+
 def pregunta_07():
     """
     Para cada valor distinto de la segunda columna (`value`), construya la
@@ -11,4 +15,18 @@ def pregunta_07():
         [(0, ["C"]), (1, ["E", "B", "E"]), (2, ["A", "E"]), ...]
     """
 
-    raise NotImplementedError
+    data_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "data",
+        "data.csv",
+    )
+    letters_by_value = {}
+    with open(data_path, newline="") as data_file:
+        for row in csv.reader(data_file, delimiter="\t"):
+            value = int(row[1])
+            letters_by_value.setdefault(value, []).append(row[0])
+    return sorted(letters_by_value.items())
+
+
+if __name__ == "__main__":
+    print(pregunta_07())
