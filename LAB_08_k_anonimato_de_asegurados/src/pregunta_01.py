@@ -1,3 +1,9 @@
+import json
+from pathlib import Path
+
+import pandas as pd
+
+
 def pregunta_01():
     """
     Una aseguradora quiere publicar datos de sus afiliados para que un grupo
@@ -80,4 +86,113 @@ def pregunta_01():
         }
     """
 
-    raise NotImplementedError
+    activity_dir = Path(__file__).resolve().parents[1]
+    data_file = activity_dir / "data" / "insurance.csv.gz"
+    submission_dir = activity_dir / "submission"
+    report_file = submission_dir / "privacy_report.json"
+    published_file = submission_dir / "insurance_published.csv"
+
+    data = pd.read_csv(data_file, compression="gzip")
+    original_quasi_identifiers = ["age", "sex", "bmi", "children", "region"]
+    original_class_sizes = data.groupby(
+        original_quasi_identifiers, dropna=False, observed=True
+    ).size()
+
+    data["age_group"] = pd.cut(
+        data["age"],
+        bins=[18, 30, 40, 50, 65],
+        labels=["18-29", "30-39", "40-49", "50-64"],
+        right=False,
+    )
+    data["bmi_group"] = pd.cut(
+        data["bmi"],
+        bins=[float("-inf"), 18.5, 25, 30, float("inf")],
+        labels=["bajo peso", "normal", "sobrepeso", "obesidad"],
+        right=False,
+    )
+    data["children_group"] = data["children"].map(
+        lambda count: "0" if count == 0 else "1-2" if count <= 2 else "3+"
+    )
+
+    schemes = {
+        "with_children": [
+            "age_group",
+            "sex",
+            "bmi_group",
+            "children_group",
+            "region",
+        ],
+        "without_children": ["age_group", "sex", "bmi_group", "region"],
+    }
+
+    scheme_results = {}
+    published_by_scheme = {}
+    for scheme_name, quasi_identifiers in schemes.items():
+        class_sizes = data.groupby(
+            quasi_identifiers, dropna=False, observed=True
+        ).size()
+        row_class_sizes = data.groupby(
+            quasi_identifiers, dropna=False, observed=True
+        ).transform("size")
+        published_mask = row_class_sizes >= 5
+        published = data.loc[published_mask].copy()
+        published_by_scheme[scheme_name] = published
+
+        published_diversity = published.groupby(
+            quasi_identifiers, dropna=False, observed=True
+        )["smoker"].nunique()
+        classes_without_diversity = published_diversity[
+            published_diversity <= 1
+        ].index
+        if len(classes_without_diversity):
+            class_index = pd.MultiIndex.from_frame(published[quasi_identifiers])
+            without_diversity_mask = class_index.isin(classes_without_diversity)
+            records_without_diversity = int(without_diversity_mask.sum())
+        else:
+            records_without_diversity = 0
+
+        scheme_results[scheme_name] = {
+            "quasi_identifiers": quasi_identifiers,
+            "equivalence_classes": int(len(class_sizes)),
+            "k_before_suppression": int(class_sizes.min()),
+            "suppressed_records": int(len(data) - len(published)),
+            "published_records": int(len(published)),
+            "published_classes": int(len(published_diversity)),
+            "classes_without_smoker_diversity": int(
+                (published_diversity <= 1).sum()
+            ),
+            "records_without_smoker_diversity": records_without_diversity,
+        }
+
+    selected_scheme = min(
+        schemes,
+        key=lambda name: scheme_results[name]["suppressed_records"],
+    )
+    selected_columns = schemes[selected_scheme]
+    published = published_by_scheme[selected_scheme]
+
+    report = {
+        "original_k": int(original_class_sizes.min()),
+        "original_unique_records": int((original_class_sizes == 1).sum()),
+        "schemes": scheme_results,
+        "selected_scheme": selected_scheme,
+        "mean_charges_original": float(data["charges"].mean()),
+        "mean_charges_published": float(published["charges"].mean()),
+        "smoker_rate_original": float(data["smoker"].eq("yes").mean()),
+        "smoker_rate_published": float(published["smoker"].eq("yes").mean()),
+    }
+
+    submission_dir.mkdir(parents=True, exist_ok=True)
+    report_file.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    published[selected_columns + ["smoker", "charges"]].to_csv(
+        published_file,
+        index=False,
+    )
+    return report
+
+
+if __name__ == "__main__":
+    pregunta_01()
