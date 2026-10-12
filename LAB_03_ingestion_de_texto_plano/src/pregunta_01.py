@@ -1,3 +1,9 @@
+from pathlib import Path
+import re
+
+import pandas as pd
+
+
 def pregunta_01():
     """
     El archivo `data/clusters_report.txt` es un reporte de clústeres de
@@ -26,4 +32,48 @@ def pregunta_01():
         ...
     """
 
-    raise NotImplementedError
+    ruta_reporte = Path(__file__).resolve().parents[1] / "data" / "clusters_report.txt"
+    patron_fila = re.compile(r"^\s*(\d+)\s+(\d+)\s+([\d,]+)\s*%\s+(.*)$")
+    registros = []
+    registro_actual = None
+
+    with ruta_reporte.open(encoding="utf-8") as archivo:
+        for linea in archivo:
+            coincidencia = patron_fila.match(linea)
+            if coincidencia:
+                if registro_actual is not None:
+                    registros.append(registro_actual)
+
+                cluster, cantidad, porcentaje, palabras = coincidencia.groups()
+                registro_actual = {
+                    "cluster": int(cluster),
+                    "cantidad_de_palabras_clave": int(cantidad),
+                    "porcentaje_de_palabras_clave": float(
+                        porcentaje.replace(",", ".")
+                    ),
+                    "fragmentos": [palabras.strip()],
+                }
+            elif registro_actual is not None and linea.strip():
+                registro_actual["fragmentos"].append(linea.strip())
+
+    if registro_actual is not None:
+        registros.append(registro_actual)
+
+    for registro in registros:
+        texto = " ".join(" ".join(registro.pop("fragmentos")).split()).rstrip(".")
+        palabras = [palabra.strip() for palabra in texto.split(",")]
+        registro["principales_palabras_clave"] = ", ".join(palabras)
+
+    return pd.DataFrame(
+        registros,
+        columns=[
+            "cluster",
+            "cantidad_de_palabras_clave",
+            "porcentaje_de_palabras_clave",
+            "principales_palabras_clave",
+        ],
+    )
+
+
+if __name__ == "__main__":
+    print(pregunta_01())
