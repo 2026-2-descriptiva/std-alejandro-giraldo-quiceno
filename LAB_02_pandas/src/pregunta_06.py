@@ -1,3 +1,8 @@
+from pathlib import Path
+
+import pandas as pd
+
+
 def pregunta_06():
     """
     Usando `data/tbl1.tsv`, obtenga los valores distintos de la columna `c4`,
@@ -9,4 +14,10 @@ def pregunta_06():
         ["A", "B", "C", "D", "E", "F", "G"]
     """
 
-    raise NotImplementedError
+    ruta_datos = Path(__file__).resolve().parents[1] / "data" / "tbl1.tsv"
+    tabla = pd.read_csv(ruta_datos, sep="\t")
+    return sorted(tabla["c4"].str.upper().unique().tolist())
+
+
+if __name__ == "__main__":
+    print(pregunta_06())
